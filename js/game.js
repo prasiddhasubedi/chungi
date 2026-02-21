@@ -98,23 +98,26 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.3;
+renderer.toneMappingExposure = 1.0;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1a0f05);
-scene.fog = new THREE.FogExp2(0x1a0f05, 0.03);
+scene.background = new THREE.Color(0x87ceeb);       // daytime sky blue
+scene.fog = new THREE.FogExp2(0x87ceeb, 0.015);     // light haze
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 300);
 camera.position.set(0, 6, 10);
 camera.lookAt(0, 0, 0);
 
 // ═══════════════════════════════════════════════════════
-// LIGHTS
+// LIGHTS  (daytime setup)
 // ═══════════════════════════════════════════════════════
-const ambientLight = new THREE.AmbientLight(0x3a2010, 0.9);
+const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0xd8c8a8, 0.9);
+scene.add(hemiLight);
+
+const ambientLight = new THREE.AmbientLight(0xfff5e0, 1.6);
 scene.add(ambientLight);
 
-const sunLight = new THREE.DirectionalLight(0xff8c3a, 2.2);
+const sunLight = new THREE.DirectionalLight(0xfff8e8, 3.0);
 sunLight.position.set(-10, 18, -8);
 sunLight.castShadow = true;
 sunLight.shadow.mapSize.width = 2048;
@@ -128,7 +131,7 @@ sunLight.shadow.camera.bottom = -25;
 sunLight.shadow.bias = -0.001;
 scene.add(sunLight);
 
-const fillLight = new THREE.PointLight(0xff6020, 0.8, 50);
+const fillLight = new THREE.PointLight(0xb0c8ff, 0.4, 50);
 fillLight.position.set(6, 6, 8);
 scene.add(fillLight);
 
@@ -145,14 +148,14 @@ for (let i = 0; i < gvArr.length; i += 3) {
 groundGeo.attributes.position.needsUpdate = true;
 groundGeo.computeVertexNormals();
 
-const groundMat = new THREE.MeshStandardMaterial({ color: 0x4a4540, roughness: 0.95, metalness: 0.02 });
+const groundMat = new THREE.MeshStandardMaterial({ color: 0xc4bdb0, roughness: 0.92, metalness: 0.02 });
 const groundMesh = new THREE.Mesh(groundGeo, groundMat);
 groundMesh.rotation.x = -Math.PI / 2;
 groundMesh.receiveShadow = true;
 scene.add(groundMesh);
 
 // Concrete expansion joints
-const jointMat = new THREE.MeshStandardMaterial({ color: 0x3a3530, roughness: 1.0 });
+const jointMat = new THREE.MeshStandardMaterial({ color: 0xa8a298, roughness: 1.0 });
 for (let i = -8; i <= 8; i++) {
   const h = new THREE.Mesh(new THREE.BoxGeometry(40, 0.02, 0.06), jointMat);
   h.position.set(0, 0.005, i * 2);
@@ -606,22 +609,28 @@ function applyModeEnvironment(mode) {
   if (mode.night) {
     scene.background.setHex(0x030508);
     scene.fog.color.setHex(0x030508);
-    ambientLight.intensity = 0.3;
-    sunLight.intensity = 0.2;
+    hemiLight.intensity     = 0.05;
+    ambientLight.color.setHex(0x101520);
+    ambientLight.intensity  = 0.4;
+    sunLight.color.setHex(0x3040a0);
+    sunLight.intensity      = 0.3;
   } else if (mode.rain) {
-    scene.background.setHex(0x1a2030);
-    scene.fog.color.setHex(0x1a2030);
-    ambientLight.color.setHex(0x204060);
-    ambientLight.intensity = 0.7;
-    sunLight.color.setHex(0x8090a0);
-    sunLight.intensity = 1.2;
+    scene.background.setHex(0x8090a8);
+    scene.fog.color.setHex(0x8090a8);
+    hemiLight.intensity     = 0.4;
+    ambientLight.color.setHex(0xb0bcc8);
+    ambientLight.intensity  = 1.1;
+    sunLight.color.setHex(0xc0ccd8);
+    sunLight.intensity      = 1.5;
   } else {
-    scene.background.setHex(0x1a0f05);
-    scene.fog.color.setHex(0x1a0f05);
-    ambientLight.color.setHex(0x3a2010);
-    ambientLight.intensity = 0.9;
-    sunLight.color.setHex(0xff8c3a);
-    sunLight.intensity = 2.2;
+    // Classic / Hardcore – bright daytime
+    scene.background.setHex(0x87ceeb);
+    scene.fog.color.setHex(0x87ceeb);
+    hemiLight.intensity     = 0.9;
+    ambientLight.color.setHex(0xfff5e0);
+    ambientLight.intensity  = 1.6;
+    sunLight.color.setHex(0xfff8e8);
+    sunLight.intensity      = 3.0;
   }
   if (elModeName) elModeName.textContent = mode.name;
   if (elCharName) elCharName.textContent = selectedCharacter.name;
@@ -825,14 +834,14 @@ function animateChars(time) {
 // 3D ENVIRONMENT
 // ═══════════════════════════════════════════════════════
 function buildEnvironment() {
-  // Library building (left)
-  addBuilding(-20, 0, 0, 10, 14, 40, 0x8a7a6a);
-  // D Block (right)
-  addBuilding(20, 0, 0, 12, 16, 45, 0x9a8a7a);
-  // Material Lab (behind, negative Z)
-  addBuilding(0, 0, -22, 25, 11, 10, 0x7a8a7a);
-  // Toilet building (far corner)
-  addBuilding(-14, 0, 16, 6, 4, 6, 0x8a8a7a);
+  // Library building (left) – warm sandstone
+  addBuilding(-20, 0, 0, 10, 14, 40, 0xd4c4a8);
+  // D Block (right) – light gray-beige
+  addBuilding(20, 0, 0, 12, 16, 45, 0xccc0b0);
+  // Material Lab (behind, negative Z) – light green-gray
+  addBuilding(0, 0, -22, 25, 11, 10, 0xb8c8b0);
+  // Toilet building (far corner) – plain light gray
+  addBuilding(-14, 0, 16, 6, 4, 6, 0xd4d4c4);
 
   // Tennis court fence (positive Z)
   const fenceMat = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.5, metalness: 0.7 });
@@ -858,6 +867,73 @@ function buildEnvironment() {
 
   // Streetlights
   addStreetLights();
+
+  // ── Building signs ──────────────────────────────────────────────────────────
+  // Library (right face at x=-15, normal faces +X toward parking lot)
+  addBuildingSign(-14.9, 5,  0,   Math.PI / 2,  4.5, 1.4,
+    ['LIBRARY', 'Thapathali Campus']);
+
+  // D Block (left face at x=14, normal faces -X toward parking lot)
+  addBuildingSign(14.1,  5,  0,  -Math.PI / 2,  5.5, 1.6,
+    ['D BLOCK', 'Thapathali Engineering Campus']);
+
+  // Material Testing Lab (front face at z=-17, normal faces +Z toward parking lot)
+  addBuildingSign(0, 4.5, -16.9,  0,           9.0, 2.2,
+    ['THAPATHALI', 'MATERIAL TESTING LAB', 'Civil Engineering Dept.']);
+
+  // Ground label in the parking area
+  addBuildingSign(0, 0.05, 7,  0,             7.0, 1.6,
+    ['THAPATHALI ENGINEERING CAMPUS', 'PARKING AREA'],
+    { bg: '#ffffff', border: '#cc3300', color: '#cc3300' });
+}
+
+// ─── Building sign helpers ───────────────────────────────────────────────────
+function makeSignTex(lines, opts = {}) {
+  const W  = 512;
+  const H  = Math.max(80, lines.length * 80);
+  const cvs = document.createElement('canvas');
+  cvs.width = W; cvs.height = H;
+  const ctx = cvs.getContext('2d');
+
+  ctx.fillStyle = opts.bg || '#fff9e8';
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = opts.border || '#1a3a8a';
+  ctx.lineWidth = 8;
+  ctx.strokeRect(4, 4, W - 8, H - 8);
+
+  const step   = H / (lines.length + 1);
+  const maxFs  = Math.floor(step * 0.72);
+  ctx.fillStyle  = opts.color || '#1a2a6a';
+  ctx.textAlign  = 'center';
+  ctx.textBaseline = 'middle';
+
+  lines.forEach((text, i) => {
+    // Auto-shrink font so long text fits
+    let fs = maxFs;
+    ctx.font = `bold ${fs}px Arial, sans-serif`;
+    while (ctx.measureText(text).width > W - 24 && fs > 10) {
+      fs -= 2;
+      ctx.font = `bold ${fs}px Arial, sans-serif`;
+    }
+    ctx.fillText(text, W / 2, (i + 1) * step);
+  });
+
+  return new THREE.CanvasTexture(cvs);
+}
+
+function addBuildingSign(x, y, z, rotY, w, h, lines, opts = {}) {
+  const mat  = new THREE.MeshBasicMaterial({
+    map: makeSignTex(lines, opts),
+    transparent: true,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+  mesh.position.set(x, y, z);
+  mesh.rotation.y = rotY;
+  // Lay flat on ground when y ≈ 0 (ground label)
+  if (y < 0.1) mesh.rotation.x = -Math.PI / 2;
+  scene.add(mesh);
 }
 
 function addBuilding(x, y, z, w, h, d, color) {
@@ -868,7 +944,7 @@ function addBuilding(x, y, z, w, h, d, color) {
   mesh.receiveShadow = true;
   scene.add(mesh);
 
-  const winMat = new THREE.MeshStandardMaterial({ color: 0xffcc66, roughness: 0.2, emissive: 0xffaa00, emissiveIntensity: 0.3 });
+  const winMat = new THREE.MeshStandardMaterial({ color: 0x99bbdd, roughness: 0.1, emissive: 0x4488bb, emissiveIntensity: 0.08, metalness: 0.25, transparent: true, opacity: 0.85 });
   const rows = Math.max(1, Math.floor(h / 3.5));
   const cols = Math.max(1, Math.floor(w / 2.8));
   for (let r = 1; r <= rows; r++) {
