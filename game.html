@@ -50,29 +50,36 @@
 
 <!-- Move Buttons -->
 <div class="move-buttons">
-  <button class="move-btn" title="Basic Tap">
-    👟 Basic Tap<span class="key">[1 / Space]</span>
+  <button class="move-btn" title="Basic Tap" onclick="if(typeof doKickByIndex==='function')doKickByIndex(0)">
+    👟<span class="key">[1]</span>
   </button>
-  <button class="move-btn" title="Side Flick">
-    ↩️ Side Flick<span class="key">[2]</span>
+  <button class="move-btn" title="Side Flick" onclick="if(typeof doKickByIndex==='function')doKickByIndex(1)">
+    ↩️<span class="key">[2]</span>
   </button>
-  <button class="move-btn" title="Back Heel">
-    🦶 Back Heel<span class="key">[3]</span>
+  <button class="move-btn" title="Back Heel" onclick="if(typeof doKickByIndex==='function')doKickByIndex(2)">
+    🦶<span class="key">[3]</span>
   </button>
-  <button class="move-btn" title="Jump Pass">
-    🦘 Jump Pass<span class="key">[4]</span>
+  <button class="move-btn" title="Jump Pass" onclick="if(typeof doKickByIndex==='function')doKickByIndex(3)">
+    🦘<span class="key">[4]</span>
   </button>
-  <button class="move-btn" title="Spin Trick">
-    🌀 Spin Trick<span class="key">[5]</span>
+  <button class="move-btn" title="Spin Trick" onclick="if(typeof doKickByIndex==='function')doKickByIndex(4)">
+    🌀<span class="key">[5]</span>
   </button>
-  <button class="move-btn" title="Power Kick">
-    💥 Power Kick<span class="key">[6]</span>
+  <button class="move-btn" title="Power Kick" onclick="if(typeof doKickByIndex==='function')doKickByIndex(5)">
+    💥<span class="key">[6]</span>
   </button>
+</div>
+
+<!-- Mobile Joystick -->
+<div id="joystick-zone" class="joystick-zone">
+  <div id="joystick-base" class="joystick-base">
+    <div id="joystick-stick" class="joystick-stick"></div>
+  </div>
 </div>
 
 <!-- Controls hint -->
 <div class="controls-hint" id="controls-hint">
-  Press 1–6 or Space to kick • Click move buttons or characters • Don't let Chungee touch the ground!
+  WASD / Joystick to move • Get near ball then press 1–6 or Space to kick • Rally restarts if ball hits ground!
 </div>
 
 <!-- Toast / Floating Feedback -->

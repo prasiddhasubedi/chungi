@@ -72,6 +72,25 @@ let kicks = 0;
 let lastKickTime = 0;
 let totalGroundTime = 0;
 
+// ── Human player / bot state ─────────────────────────────
+let humanCharIdx = 0;
+const playerPos  = { x: 0, z: 0 };
+const keys       = {};          // keyboard state
+const joyInput   = { x: 0, y: 0 }; // joystick input
+const botTimers  = {};          // per-bot kick countdown
+
+const BOT_KICK_RANGE      = 1.8;  // distance at which a bot detects the ball
+const BOT_MIN_REACT       = 0.25; // minimum bot reaction time (s)
+const BOT_MAX_REACT       = 0.80; // maximum bot reaction time (s)
+const BOT_FORCE_MULT      = 1.1;  // safety multiplier so ball reliably reaches target
+const BOT_MIN_FORCE       = 3.5;  // minimum bot kick speed
+const BOT_MAX_FORCE       = 9.0;  // maximum bot kick speed
+const KICK_RADIUS         = 2.0;  // how close human must be to the ball to kick
+const PLAYER_MOVE_SPEED   = 5.0;  // human movement speed (m/s)
+const PLAYER_HEIGHT_REACH = 0.8;  // effective foot/kick height for proximity checks
+const PLAYER_BOUNDS_X     = 4.5;  // playable area half-width
+const PLAYER_BOUNDS_Z     = 12.0; // playable area half-depth
+
 // ═══════════════════════════════════════════════════════
 // THREE.JS SETUP
 // ═══════════════════════════════════════════════════════
@@ -85,8 +104,8 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.3;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1a0f05);
-scene.fog = new THREE.FogExp2(0x1a0f05, 0.03);
+scene.background = new THREE.Color(0x7ab8e8);
+scene.fog = new THREE.FogExp2(0x7ab8e8, 0.012);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 300);
 camera.position.set(0, 6, 10);
@@ -95,10 +114,10 @@ camera.lookAt(0, 0, 0);
 // ═══════════════════════════════════════════════════════
 // LIGHTS
 // ═══════════════════════════════════════════════════════
-const ambientLight = new THREE.AmbientLight(0x3a2010, 0.9);
+const ambientLight = new THREE.AmbientLight(0xc0d8f0, 2.5);
 scene.add(ambientLight);
 
-const sunLight = new THREE.DirectionalLight(0xff8c3a, 2.2);
+const sunLight = new THREE.DirectionalLight(0xfff5e0, 4.0);
 sunLight.position.set(-10, 18, -8);
 sunLight.castShadow = true;
 sunLight.shadow.mapSize.width = 2048;
@@ -112,7 +131,7 @@ sunLight.shadow.camera.bottom = -25;
 sunLight.shadow.bias = -0.001;
 scene.add(sunLight);
 
-const fillLight = new THREE.PointLight(0xff6020, 0.8, 50);
+const fillLight = new THREE.PointLight(0xffeedd, 1.2, 50);
 fillLight.position.set(6, 6, 8);
 scene.add(fillLight);
 
@@ -293,25 +312,18 @@ setTimeout(() => {
 }, 1400);
 
 // ═══════════════════════════════════════════════════════
-// MOVE BUTTONS
-// ═══════════════════════════════════════════════════════
-document.querySelectorAll('.move-btn').forEach((btn, i) => {
-  btn.addEventListener('click', () => {
-    if (!gameStarted || gamePaused || gameEnded) return;
-    doKick(MOVES[i]);
-  });
-});
-
-// ═══════════════════════════════════════════════════════
 // KEYBOARD
 // ═══════════════════════════════════════════════════════
 document.addEventListener('keydown', (e) => {
+  keys[e.code] = true;
   if (!gameStarted || gamePaused || gameEnded) return;
   const idx = parseInt(e.key) - 1;
   if (idx >= 0 && idx < MOVES.length) doKick(MOVES[idx]);
   if (e.code === 'Space') { e.preventDefault(); doKick(MOVES[0]); }
   if (e.code === 'Escape') onBtnPause();
 });
+
+document.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
 // ═══════════════════════════════════════════════════════
 // CANVAS CLICK (tap on characters)
@@ -330,6 +342,50 @@ canvas.addEventListener('click', (e) => {
 });
 
 // ═══════════════════════════════════════════════════════
+// MOBILE JOYSTICK
+// ═══════════════════════════════════════════════════════
+(function setupJoystick() {
+  const jBase  = document.getElementById('joystick-base');
+  const jStick = document.getElementById('joystick-stick');
+  if (!jBase) return;
+  const JOY_R = 35;
+  let touchId = null, originX = 0, originY = 0;
+
+  jBase.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    touchId = t.identifier;
+    const r = jBase.getBoundingClientRect();
+    originX = r.left + r.width  / 2;
+    originY = r.top  + r.height / 2;
+  }, { passive: false });
+
+  document.addEventListener('touchmove', (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier !== touchId) continue;
+      e.preventDefault();
+      const dx = t.clientX - originX;
+      const dy = t.clientY - originY;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = (dx / len) * Math.min(len, JOY_R);
+      const ny = (dy / len) * Math.min(len, JOY_R);
+      joyInput.x = nx / JOY_R;
+      joyInput.y = ny / JOY_R;
+      if (jStick) jStick.style.transform = `translate(calc(-50% + ${nx}px), calc(-50% + ${ny}px))`;
+    }
+  }, { passive: false });
+
+  document.addEventListener('touchend', (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier !== touchId) continue;
+      touchId = null;
+      joyInput.x = 0; joyInput.y = 0;
+      if (jStick) jStick.style.transform = 'translate(-50%, -50%)';
+    }
+  });
+})();
+
+// ═══════════════════════════════════════════════════════
 // KICK / GAME LOGIC
 // ═══════════════════════════════════════════════════════
 const kickAnims = {};
@@ -337,30 +393,42 @@ const kickAnims = {};
 function doKick(move) {
   const now = performance.now();
   if (now - lastKickTime < 150) return;
+
+  // Proximity check – must be near the ball to kick
+  const pdx = ball.x - playerPos.x;
+  const pdy = ball.y - PLAYER_HEIGHT_REACH;
+  const pdz = ball.z - playerPos.z;
+  if (Math.sqrt(pdx * pdx + pdy * pdy + pdz * pdz) > KICK_RADIUS) {
+    showToast('Move closer! 👟', '#f97316');
+    return;
+  }
   lastKickTime = now;
+
+  // Target nearest bot (in any direction from player)
+  let targetIdx = -1, minDist = Infinity;
+  charMeshes.forEach((m, i) => {
+    if (i === humanCharIdx) return;
+    const d = Math.hypot(m.position.x - playerPos.x, m.position.z - playerPos.z);
+    if (d < minDist) { minDist = d; targetIdx = i; }
+  });
+  if (targetIdx < 0) return;
+
+  const tm = charMeshes[targetIdx];
+  const tAngle = Math.atan2(tm.position.x - playerPos.x, tm.position.z - playerPos.z);
 
   const powMult = selectedCharacter.power / 100;
   const agiMult = selectedCharacter.agility / 100;
   const spnMult = selectedCharacter.spin / 100;
   const speedMod = selectedMode.speedMult;
 
-  // Find nearest character angle to ball
-  let nearestAngle = 0, nearestDist = Infinity;
-  CHARACTERS.forEach((_, i) => {
-    const ang = (i / CHARACTERS.length) * Math.PI * 2;
-    const d = Math.hypot(ball.x - Math.sin(ang) * CIRCLE_RADIUS, ball.z - Math.cos(ang) * CIRCLE_RADIUS);
-    if (d < nearestDist) { nearestDist = d; nearestAngle = ang; }
-  });
-
   const spread = move.spread * (1 - agiMult * 0.3);
-  const kickAngle = nearestAngle + Math.PI + (Math.random() - 0.5) * spread;
+  const kickAngle = tAngle + (Math.random() - 0.5) * spread;
   const force = move.force * powMult * speedMod;
   const vAngle = (move.angle + (Math.random() - 0.5) * 10) * Math.PI / 180;
 
   ball.vx = Math.sin(kickAngle) * force * Math.cos(vAngle);
   ball.vz = Math.cos(kickAngle) * force * Math.cos(vAngle);
   ball.vy = force * Math.sin(vAngle);
-
   ball.vrx = (Math.random() - 0.5) * move.spin * spnMult * 10;
   ball.vry = (Math.random() - 0.5) * move.spin * spnMult * 10;
   ball.vrz = (Math.random() - 0.5) * move.spin * spnMult * 10;
@@ -373,17 +441,7 @@ function doKick(move) {
 
   updateHUD();
   showToast(combo > 5 ? `🔥 x${combo}` : move.name, combo > 10 ? '#ffd700' : '#fbbf24');
-  triggerKickAnim(nearestAngle);
-}
-
-function triggerKickAnim(angle) {
-  let nearest = 0, minDiff = Infinity;
-  CHARACTERS.forEach((_, i) => {
-    const a = (i / CHARACTERS.length) * Math.PI * 2;
-    const diff = Math.min(Math.abs(a - angle), Math.PI * 2 - Math.abs(a - angle));
-    if (diff < minDiff) { minDiff = diff; nearest = i; }
-  });
-  kickAnims[nearest] = { t: 1.0 };
+  kickAnims[humanCharIdx] = { t: 1.0 };
 }
 
 function endGame() {
@@ -401,12 +459,22 @@ function startGame() {
   score = 0; combo = 0; maxCombo = 0; kicks = 0;
   gameEnded = false; gamePaused = false; gameStarted = true;
   totalGroundTime = 0;
+  Object.keys(botTimers).forEach(k => delete botTimers[k]);
+
+  humanCharIdx = CHARACTERS.findIndex(c => c.id === selectedCharacter.id);
+  if (humanCharIdx < 0) humanCharIdx = 0;
+
+  // Place human at their circle position
+  const hMesh = charMeshes[humanCharIdx];
+  playerPos.x = hMesh.position.x;
+  playerPos.z = hMesh.position.z;
 
   gameGravity = selectedMode.gravity;
   gameFriction = selectedMode.friction;
 
-  ball.x = 0; ball.y = 2.0; ball.z = 0;
-  ball.vx = (Math.random() - 0.5); ball.vy = 3.5; ball.vz = (Math.random() - 0.5);
+  // Park ball on ground at center while environment loads, then start rally
+  ball.x = 0; ball.y = 0.1; ball.z = 0;
+  ball.vx = 0; ball.vy = 0; ball.vz = 0;
   ball.vrx = 0; ball.vry = 0; ball.vrz = 0;
 
   applyModeEnvironment(selectedMode);
@@ -417,8 +485,118 @@ function startGame() {
   elSelMenu.classList.add('hidden');
   elModeMenu.classList.add('hidden');
 
-  if (elHint) { elHint.style.opacity = '1'; setTimeout(() => { elHint.style.opacity = '0'; }, 4000); }
+  if (elHint) { elHint.style.opacity = '1'; setTimeout(() => { elHint.style.opacity = '0'; }, 5000); }
   if (elPauseBtn) elPauseBtn.textContent = '⏸ Pause';
+
+  // Kick off the first rally after a short delay
+  setTimeout(() => { if (gameStarted) restartRally(); }, 500);
+}
+
+// ─────────────────────────────────────────────
+// RALLY RESTART (replaces permanent game-over)
+// ─────────────────────────────────────────────
+function restartRally() {
+  totalGroundTime = 0;
+  combo = 0;
+  Object.keys(botTimers).forEach(k => delete botTimers[k]);
+  updateHUD();
+
+  const startIdx = Math.floor(Math.random() * CHARACTERS.length);
+  const startIsHuman = startIdx === humanCharIdx;
+
+  ball.x = startIsHuman ? playerPos.x : charMeshes[startIdx].position.x;
+  ball.y = 1.5;
+  ball.z = startIsHuman ? playerPos.z : charMeshes[startIdx].position.z;
+  ball.vx = 0; ball.vy = 2.5; ball.vz = 0;
+  ball.vrx = 0; ball.vry = 0; ball.vrz = 0;
+
+  showToast('New Rally! 🏃', '#f97316');
+}
+
+// ─────────────────────────────────────────────
+// BOT AI
+// ─────────────────────────────────────────────
+function updateBotAI(dt) {
+  CHARACTERS.forEach((_, i) => {
+    if (i === humanCharIdx) return;
+    const mesh = charMeshes[i];
+    const dist3d = Math.hypot(ball.x - mesh.position.x, ball.z - mesh.position.z, ball.y - PLAYER_HEIGHT_REACH);
+
+    if (dist3d < BOT_KICK_RANGE) {
+      if (botTimers[i] === undefined) {
+        botTimers[i] = BOT_MIN_REACT + Math.random() * (BOT_MAX_REACT - BOT_MIN_REACT);
+      }
+      botTimers[i] -= dt;
+      if (botTimers[i] <= 0) {
+        delete botTimers[i];
+        botKickFrom(i);
+      }
+    } else if (dist3d > BOT_KICK_RANGE * 3) {
+      delete botTimers[i];
+    }
+  });
+}
+
+function botKickFrom(botIdx) {
+  // 40% chance to target human, otherwise a random other bot
+  const otherBots = CHARACTERS.map((_, i) => i).filter(i => i !== botIdx && i !== humanCharIdx);
+  let targetIdx;
+  if (Math.random() < 0.40 || otherBots.length === 0) {
+    targetIdx = humanCharIdx;
+  } else {
+    targetIdx = otherBots[Math.floor(Math.random() * otherBots.length)];
+  }
+
+  const srcMesh = charMeshes[botIdx];
+  const tgtX = (targetIdx === humanCharIdx) ? playerPos.x : charMeshes[targetIdx].position.x;
+  const tgtZ = (targetIdx === humanCharIdx) ? playerPos.z : charMeshes[targetIdx].position.z;
+
+  const dx = tgtX - srcMesh.position.x;
+  const dz = tgtZ - srcMesh.position.z;
+  const horizDist = Math.hypot(dx, dz) || 0.1;
+  const angle = Math.atan2(dx, dz);
+
+  // Compute force to reach target using projectile physics (launch at 60°)
+  const vAng = 60 * Math.PI / 180;
+  const rawForce = Math.sqrt(horizDist * Math.abs(gameGravity) / Math.sin(2 * vAng)) * BOT_FORCE_MULT;
+  const force = Math.max(BOT_MIN_FORCE, Math.min(rawForce, BOT_MAX_FORCE)) * selectedMode.speedMult;
+
+  ball.vx = Math.sin(angle) * force * Math.cos(vAng);
+  ball.vz = Math.cos(angle) * force * Math.cos(vAng);
+  ball.vy = force * Math.sin(vAng);
+  ball.vrx = (Math.random() - 0.5) * 5;
+  ball.vry = (Math.random() - 0.5) * 5;
+  ball.vrz = (Math.random() - 0.5) * 5;
+
+  kickAnims[botIdx] = { t: 1.0 };
+  showToast(`${CHARACTERS[botIdx].name} kicks!`, '#666666');
+}
+
+// ─────────────────────────────────────────────
+// PLAYER MOVEMENT
+// ─────────────────────────────────────────────
+function updatePlayerMovement(dt) {
+  let dx = 0, dz = 0;
+  if (keys['KeyW']    || keys['ArrowUp'])    dz -= 1;
+  if (keys['KeyS']    || keys['ArrowDown'])  dz += 1;
+  if (keys['KeyA']    || keys['ArrowLeft'])  dx -= 1;
+  if (keys['KeyD']    || keys['ArrowRight']) dx += 1;
+  dx += joyInput.x;
+  dz += joyInput.y;
+
+  const len = Math.hypot(dx, dz);
+  if (len > 0) {
+    const spd = PLAYER_MOVE_SPEED * dt;
+    playerPos.x = Math.max(-PLAYER_BOUNDS_X, Math.min(PLAYER_BOUNDS_X, playerPos.x + (dx / len) * spd));
+    playerPos.z = Math.max(-PLAYER_BOUNDS_Z, Math.min(PLAYER_BOUNDS_Z, playerPos.z + (dz / len) * spd));
+  }
+
+  const hMesh = charMeshes[humanCharIdx];
+  if (hMesh) {
+    hMesh.position.x = playerPos.x;
+    hMesh.position.z = playerPos.z;
+    if (len > 0) hMesh.rotation.y = Math.atan2(dx / len, dz / len) + Math.PI;
+  }
 }
 
 function applyModeEnvironment(mode) {
@@ -428,19 +606,19 @@ function applyModeEnvironment(mode) {
     ambientLight.intensity = 0.3;
     sunLight.intensity = 0.2;
   } else if (mode.rain) {
-    scene.background.setHex(0x1a2030);
-    scene.fog.color.setHex(0x1a2030);
-    ambientLight.color.setHex(0x204060);
-    ambientLight.intensity = 0.7;
-    sunLight.color.setHex(0x8090a0);
-    sunLight.intensity = 1.2;
+    scene.background.setHex(0x506070);
+    scene.fog.color.setHex(0x506070);
+    ambientLight.color.setHex(0x607080);
+    ambientLight.intensity = 1.5;
+    sunLight.color.setHex(0x9090a0);
+    sunLight.intensity = 2.0;
   } else {
-    scene.background.setHex(0x1a0f05);
-    scene.fog.color.setHex(0x1a0f05);
-    ambientLight.color.setHex(0x3a2010);
-    ambientLight.intensity = 0.9;
-    sunLight.color.setHex(0xff8c3a);
-    sunLight.intensity = 2.2;
+    scene.background.setHex(0x7ab8e8);
+    scene.fog.color.setHex(0x7ab8e8);
+    ambientLight.color.setHex(0xc0d8f0);
+    ambientLight.intensity = 2.5;
+    sunLight.color.setHex(0xfff5e0);
+    sunLight.intensity = 4.0;
   }
   if (elModeName) elModeName.textContent = mode.name;
   if (elCharName) elCharName.textContent = selectedCharacter.name;
@@ -488,6 +666,10 @@ function animate(time) {
   lastTime = time;
 
   if (gameStarted && !gamePaused && !gameEnded) {
+    // Player movement + bot AI
+    updatePlayerMovement(dt);
+    updateBotAI(dt);
+
     // Physics
     ball.vy += gameGravity * dt;
     ball.vx *= (1 - AIR_DRAG);
@@ -515,7 +697,7 @@ function animate(time) {
         // Tiny nudge from the 1% slope – visual realism only; too small to
         // create directional advantage or affect skill-based gameplay.
         ball.vx += 0.002;
-        if (totalGroundTime > 1.5) { endGame(); return; }
+        if (totalGroundTime > 1.5) { restartRally(); return; }
       } else {
         totalGroundTime = 0;
         if (combo > 0) { combo = 0; updateHUD(); }
@@ -542,13 +724,14 @@ function animate(time) {
     shadowBlob.scale.setScalar(ss);
     shadowBlobMat.opacity = Math.max(0.05, 0.4 * ss);
 
-    // Camera: follow ball with lag
-    const tX = ball.x * 0.25;
-    const tY = Math.max(4.5, ball.y + 5);
-    camera.position.x += (tX - camera.position.x) * 0.04;
-    camera.position.y += (tY - camera.position.y) * 0.03;
-    camera.position.z += (10 - camera.position.z) * 0.02;
-    camera.lookAt(ball.x * 0.2, ball.y * 0.15, 0);
+    // Camera: follow player with ball in view
+    const camTX = playerPos.x * 0.5 + ball.x * 0.5;
+    const camTY = Math.max(5, ball.y + 5);
+    const camTZ = playerPos.z + 10;
+    camera.position.x += (camTX - camera.position.x) * 0.05;
+    camera.position.y += (camTY - camera.position.y) * 0.04;
+    camera.position.z += (camTZ - camera.position.z) * 0.04;
+    camera.lookAt(playerPos.x * 0.4 + ball.x * 0.6, ball.y * 0.2, playerPos.z);
 
   } else if (!gameStarted && !gameEnded) {
     // Idle orbit + auto-bounce
@@ -641,6 +824,10 @@ function buildEnvironment() {
 
   // Streetlights
   addStreetLights();
+
+  // Signboards
+  addSignboard(-14.5, 8, 0,    'Library',                             5.0, 1.2, Math.PI / 2);
+  addSignboard(0,     7, -17.2, 'Thapathali\nMaterial Testing Lab',   8.0, 1.6, 0);
 }
 
 function addBuilding(x, y, z, w, h, d, color) {
@@ -732,6 +919,30 @@ function addStreetLights() {
   });
 }
 
+function addSignboard(x, y, z, text, w, h, rotY) {
+  const cvs = document.createElement('canvas');
+  cvs.width = 512; cvs.height = 128;
+  const ctx = cvs.getContext('2d');
+  ctx.fillStyle = '#f5f0e0';
+  ctx.fillRect(0, 0, 512, 128);
+  ctx.strokeStyle = '#8a6030';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(3, 3, 506, 122);
+  ctx.fillStyle = '#1a0800';
+  ctx.font = 'bold 28px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const lines = text.split('\n');
+  const lh = 36;
+  const startY = 64 - ((lines.length - 1) * lh) / 2;
+  lines.forEach((l, i) => ctx.fillText(l, 256, startY + i * lh));
+  const mat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cvs), side: THREE.DoubleSide });
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+  sign.position.set(x, y, z);
+  if (rotY) sign.rotation.y = rotY;
+  scene.add(sign);
+}
+
 // ═══════════════════════════════════════════════════════
 // CHARACTER MESH BUILDER
 // ═══════════════════════════════════════════════════════
@@ -819,6 +1030,10 @@ function addAccessory(grp, char, s) {
 // ═══════════════════════════════════════════════════════
 // BUTTON HANDLERS (exposed globally)
 // ═══════════════════════════════════════════════════════
+window.doKickByIndex = function (i) {
+  if (!gameStarted || gamePaused || gameEnded) return;
+  doKick(MOVES[i]);
+};
 window.onBtnStart = function () {
   elSelMenu.classList.add('hidden');
   elModeMenu.classList.remove('hidden');
