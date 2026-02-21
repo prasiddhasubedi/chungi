@@ -61,6 +61,7 @@ const MODES = {
 // MUTABLE GAME STATE
 // ═══════════════════════════════════════════════════════
 let selectedCharacter = CHARACTERS[0];
+let selectedCharIndex = 0;
 let selectedMode = MODES.classic;
 let gameStarted = false;
 let gamePaused = false;
@@ -71,6 +72,21 @@ let maxCombo = 0;
 let kicks = 0;
 let lastKickTime = 0;
 let totalGroundTime = 0;
+
+// ─── Player movement ────────────────────────────────────────────────────────
+const keys       = {};                   // keyboard state
+const playerPos  = { x: 0, z: 5 };      // main player world position
+const joystick   = { dx: 0, dz: 0 };    // virtual joystick (mobile)
+const PLAYER_SPEED    = 5.0;            // m/s
+const KICK_RANGE      = 2.0;            // ball must be within this to kick
+const BOT_KICK_RANGE  = 1.8;            // ball proximity for bot auto-kick
+const BOT_KICK_HEIGHT = 2.8;            // max ball height for bot to kick
+
+// ─── Bot AI state ────────────────────────────────────────────────────────────
+let botCooldowns      = {};             // per-bot kick cooldown seconds
+let botPassCount      = 0;             // passes since last send-to-player
+let botPassTarget     = 3;             // passes before sending to player
+let ballGoingToPlayer = false;         // true when ball is aimed at player
 
 // ═══════════════════════════════════════════════════════
 // THREE.JS SETUP
@@ -177,6 +193,21 @@ shadowBlob.rotation.x = -Math.PI / 2;
 shadowBlob.position.y = 0.005;
 scene.add(shadowBlob);
 
+// Landing indicator – shows where ball will land
+const landingRingMat = new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false });
+const landingRing = new THREE.Mesh(new THREE.RingGeometry(0.25, 0.42, 32), landingRingMat);
+landingRing.rotation.x = -Math.PI / 2;
+landingRing.position.y = 0.01;
+landingRing.visible = false;
+scene.add(landingRing);
+
+// Kick-range ring – glows when ball is close enough for player to kick
+const kickRingMat = new THREE.MeshBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false });
+const kickRing = new THREE.Mesh(new THREE.RingGeometry(KICK_RANGE - 0.12, KICK_RANGE, 48), kickRingMat);
+kickRing.rotation.x = -Math.PI / 2;
+kickRing.position.y = 0.02;
+scene.add(kickRing);
+
 // ═══════════════════════════════════════════════════════
 // CHARACTERS (3D figures)
 // ═══════════════════════════════════════════════════════
@@ -240,6 +271,7 @@ CHARACTERS.forEach((char, i) => {
     document.querySelectorAll('.char-card').forEach(c => c.classList.remove('selected'));
     card.classList.add('selected');
     selectedCharacter = char;
+    selectedCharIndex = i;
   });
   charGrid.appendChild(card);
 });
@@ -306,12 +338,14 @@ document.querySelectorAll('.move-btn').forEach((btn, i) => {
 // KEYBOARD
 // ═══════════════════════════════════════════════════════
 document.addEventListener('keydown', (e) => {
+  keys[e.code] = true;
   if (!gameStarted || gamePaused || gameEnded) return;
   const idx = parseInt(e.key) - 1;
   if (idx >= 0 && idx < MOVES.length) doKick(MOVES[idx]);
   if (e.code === 'Space') { e.preventDefault(); doKick(MOVES[0]); }
   if (e.code === 'Escape') onBtnPause();
 });
+document.addEventListener('keyup',  (e) => { keys[e.code] = false; });
 
 // ═══════════════════════════════════════════════════════
 // CANVAS CLICK (tap on characters)
@@ -330,36 +364,165 @@ canvas.addEventListener('click', (e) => {
 });
 
 // ═══════════════════════════════════════════════════════
-// KICK / GAME LOGIC
+// HELPER: Bot position on circle
+// ═══════════════════════════════════════════════════════
+function getBotPosition(i) {
+  const angle = (i / CHARACTERS.length) * Math.PI * 2;
+  return { x: Math.sin(angle) * CIRCLE_RADIUS, z: Math.cos(angle) * CIRCLE_RADIUS };
+}
+
+// ═══════════════════════════════════════════════════════
+// HELPER: Aim ball toward a world-space target
+// ═══════════════════════════════════════════════════════
+function kickToward(toX, toZ, elevDeg, spread) {
+  const elev = (elevDeg || 65) * Math.PI / 180;
+  const dx   = toX - ball.x;
+  const dz   = toZ - ball.z;
+  const d    = Math.max(0.5, Math.hypot(dx, dz));
+  const dir  = Math.atan2(dx, dz);
+  const g    = Math.abs(gameGravity);
+  const sin2 = Math.max(0.01, Math.sin(2 * elev));
+  const vTotal = Math.min(12, Math.sqrt(d * g / sin2)) * selectedMode.speedMult;
+  const kickDir = dir + (Math.random() - 0.5) * (spread || 0.3);
+  ball.y  = Math.max(ball.y, BALL_RADIUS + 0.1);
+  ball.vx = Math.sin(kickDir) * vTotal * Math.cos(elev);
+  ball.vz = Math.cos(kickDir) * vTotal * Math.cos(elev);
+  ball.vy = Math.max(2.5, vTotal * Math.sin(elev));
+  ball.vrx = (Math.random() - 0.5) * 6;
+  ball.vry = (Math.random() - 0.5) * 6;
+  ball.vrz = (Math.random() - 0.5) * 6;
+}
+
+// ═══════════════════════════════════════════════════════
+// HELPER: Predict landing position
+// ═══════════════════════════════════════════════════════
+function predictLandingPos() {
+  let px = ball.x, py = ball.y, pz = ball.z;
+  let pvx = ball.vx, pvy = ball.vy, pvz = ball.vz;
+  const simDt = 0.04;
+  for (let i = 0; i < 250; i++) {
+    pvy += gameGravity * simDt;
+    pvx *= (1 - AIR_DRAG);
+    pvz *= (1 - AIR_DRAG);
+    px += pvx * simDt;
+    py += pvy * simDt;
+    pz += pvz * simDt;
+    if (py - BALL_RADIUS <= groundY(px)) return { x: px, z: pz };
+  }
+  return { x: ball.x, z: ball.z };
+}
+
+// ═══════════════════════════════════════════════════════
+// PLAYER MOVEMENT (WASD + joystick)
+// ═══════════════════════════════════════════════════════
+function updatePlayerMovement(dt) {
+  if (!gameStarted || gamePaused || gameEnded) return;
+  const speed = PLAYER_SPEED * dt;
+  let dx = 0, dz = 0;
+  if (keys['KeyW'] || keys['ArrowUp'])    dz -= 1;
+  if (keys['KeyS'] || keys['ArrowDown'])  dz += 1;
+  if (keys['KeyA'] || keys['ArrowLeft'])  dx -= 1;
+  if (keys['KeyD'] || keys['ArrowRight']) dx += 1;
+  dx += joystick.dx;
+  dz += joystick.dz;
+
+  const mag = Math.hypot(dx, dz);
+  if (mag > 0) {
+    const nx = (dx / Math.max(1, mag)) * speed;
+    const nz = (dz / Math.max(1, mag)) * speed;
+    playerPos.x = Math.max(-9, Math.min(9, playerPos.x + nx));
+    playerPos.z = Math.max(-9, Math.min(13, playerPos.z + nz));
+    charMeshes[selectedCharIndex].rotation.y = Math.atan2(nx, -nz) + Math.PI;
+  }
+  charMeshes[selectedCharIndex].position.x = playerPos.x;
+  charMeshes[selectedCharIndex].position.z = playerPos.z;
+}
+
+// ═══════════════════════════════════════════════════════
+// BOT AI – auto-pass ball between bots, occasionally to player
+// ═══════════════════════════════════════════════════════
+function updateBotAI(dt) {
+  if (!gameStarted || gamePaused || gameEnded) return;
+  CHARACTERS.forEach((_, i) => {
+    if (i === selectedCharIndex) return;
+    if ((botCooldowns[i] || 0) > 0) { botCooldowns[i] -= dt; return; }
+    const bp   = getBotPosition(i);
+    const dist = Math.hypot(ball.x - bp.x, ball.z - bp.z);
+    const ballLow = (ball.y - BALL_RADIUS) <= BOT_KICK_HEIGHT;
+    if (dist < BOT_KICK_RANGE && ballLow && ball.vy <= 0.8) {
+      botCooldowns[i] = 1.4 + Math.random() * 1.2;
+      botPassCount++;
+
+      let toX, toZ;
+      if (botPassCount >= botPassTarget || Math.random() < 0.28) {
+        // Send to player
+        toX = playerPos.x + (Math.random() - 0.5) * 2.5;
+        toZ = playerPos.z + (Math.random() - 0.5) * 2.5;
+        botPassCount = 0;
+        botPassTarget = 2 + Math.floor(Math.random() * 4);
+        ballGoingToPlayer = true;
+        showToast('Ball coming!', '#00ff88');
+      } else {
+        // Send to another bot
+        const others = CHARACTERS.map((__, j) => j).filter(j => j !== i && j !== selectedCharIndex);
+        const tp = getBotPosition(others[Math.floor(Math.random() * others.length)]);
+        toX = tp.x + (Math.random() - 0.5);
+        toZ = tp.z + (Math.random() - 0.5);
+        ballGoingToPlayer = false;
+      }
+
+      ball.x = bp.x; ball.z = bp.z;
+      kickToward(toX, toZ, 58 + Math.random() * 16, 0.35);
+      triggerKickAnim((i / CHARACTERS.length) * Math.PI * 2);
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// KICK / GAME LOGIC  (player only; proximity required)
 // ═══════════════════════════════════════════════════════
 const kickAnims = {};
 
 function doKick(move) {
   const now = performance.now();
   if (now - lastKickTime < 150) return;
+
+  // Player must be close enough to the ball
+  const distToBall = Math.hypot(ball.x - playerPos.x, ball.z - playerPos.z);
+  if (distToBall > KICK_RANGE) {
+    showToast('Too far!', '#ff4444');
+    return;
+  }
+
   lastKickTime = now;
+  ballGoingToPlayer = false;
 
-  const powMult = selectedCharacter.power / 100;
+  const powMult = selectedCharacter.power  / 100;
   const agiMult = selectedCharacter.agility / 100;
-  const spnMult = selectedCharacter.spin / 100;
-  const speedMod = selectedMode.speedMult;
+  const spnMult = selectedCharacter.spin   / 100;
 
-  // Find nearest character angle to ball
-  let nearestAngle = 0, nearestDist = Infinity;
-  CHARACTERS.forEach((_, i) => {
-    const ang = (i / CHARACTERS.length) * Math.PI * 2;
-    const d = Math.hypot(ball.x - Math.sin(ang) * CIRCLE_RADIUS, ball.z - Math.cos(ang) * CIRCLE_RADIUS);
-    if (d < nearestDist) { nearestDist = d; nearestAngle = ang; }
-  });
+  // Aim toward a random bot
+  const botIndices = CHARACTERS.map((_, i) => i).filter(i => i !== selectedCharIndex);
+  const tIdx = botIndices[Math.floor(Math.random() * botIndices.length)];
+  const tp   = getBotPosition(tIdx);
+  const toX  = tp.x + (Math.random() - 0.5) * 1.5;
+  const toZ  = tp.z + (Math.random() - 0.5) * 1.5;
 
-  const spread = move.spread * (1 - agiMult * 0.3);
-  const kickAngle = nearestAngle + Math.PI + (Math.random() - 0.5) * spread;
-  const force = move.force * powMult * speedMod;
-  const vAngle = (move.angle + (Math.random() - 0.5) * 10) * Math.PI / 180;
+  const elev    = (move.angle + (Math.random() - 0.5) * 10) * Math.PI / 180;
+  const dx      = toX - ball.x;
+  const dz      = toZ - ball.z;
+  const d       = Math.max(0.5, Math.hypot(dx, dz));
+  const dir     = Math.atan2(dx, dz);
+  const g       = Math.abs(gameGravity);
+  const vTotal  = Math.min(12, Math.sqrt(d * g / Math.max(0.01, Math.sin(2 * elev))))
+                  * selectedMode.speedMult * (move.force / 5.0) * powMult;
+  const spread  = move.spread * (1 - agiMult * 0.3);
+  const kickDir = dir + (Math.random() - 0.5) * spread;
 
-  ball.vx = Math.sin(kickAngle) * force * Math.cos(vAngle);
-  ball.vz = Math.cos(kickAngle) * force * Math.cos(vAngle);
-  ball.vy = force * Math.sin(vAngle);
+  ball.y  = Math.max(ball.y, BALL_RADIUS + 0.1);
+  ball.vx = Math.sin(kickDir) * vTotal * Math.cos(elev);
+  ball.vz = Math.cos(kickDir) * vTotal * Math.cos(elev);
+  ball.vy = Math.max(3, vTotal * Math.sin(elev));
 
   ball.vrx = (Math.random() - 0.5) * move.spin * spnMult * 10;
   ball.vry = (Math.random() - 0.5) * move.spin * spnMult * 10;
@@ -373,7 +536,7 @@ function doKick(move) {
 
   updateHUD();
   showToast(combo > 5 ? `🔥 x${combo}` : move.name, combo > 10 ? '#ffd700' : '#fbbf24');
-  triggerKickAnim(nearestAngle);
+  kickAnims[selectedCharIndex] = { t: 1.0 };
 }
 
 function triggerKickAnim(angle) {
@@ -405,9 +568,27 @@ function startGame() {
   gameGravity = selectedMode.gravity;
   gameFriction = selectedMode.friction;
 
-  ball.x = 0; ball.y = 2.0; ball.z = 0;
-  ball.vx = (Math.random() - 0.5); ball.vy = 3.5; ball.vz = (Math.random() - 0.5);
+  // Place player at their circle position and allow free movement
+  const selAngle = (selectedCharIndex / CHARACTERS.length) * Math.PI * 2;
+  playerPos.x = Math.sin(selAngle) * CIRCLE_RADIUS;
+  playerPos.z = Math.cos(selAngle) * CIRCLE_RADIUS;
+  charMeshes[selectedCharIndex].position.x = playerPos.x;
+  charMeshes[selectedCharIndex].position.z = playerPos.z;
+
+  // Reset bot AI state
+  botCooldowns    = {};
+  botPassCount    = 0;
+  botPassTarget   = 2 + Math.floor(Math.random() * 3);
+  ballGoingToPlayer = false;
+
+  // Ball starts near a random bot; that bot kicks off immediately
+  const botPool = CHARACTERS.map((_, i) => i).filter(i => i !== selectedCharIndex);
+  const startBot = botPool[Math.floor(Math.random() * botPool.length)];
+  const sp = getBotPosition(startBot);
+  ball.x = sp.x; ball.y = 1.2; ball.z = sp.z;
+  ball.vx = 0; ball.vy = 0; ball.vz = 0;
   ball.vrx = 0; ball.vry = 0; ball.vrz = 0;
+  botCooldowns[startBot] = 0;   // kick on very next frame
 
   applyModeEnvironment(selectedMode);
   updateHUD();
@@ -488,6 +669,10 @@ function animate(time) {
   lastTime = time;
 
   if (gameStarted && !gamePaused && !gameEnded) {
+    // Player movement & bot AI
+    updatePlayerMovement(dt);
+    updateBotAI(dt);
+
     // Physics
     ball.vy += gameGravity * dt;
     ball.vx *= (1 - AIR_DRAG);
@@ -542,13 +727,37 @@ function animate(time) {
     shadowBlob.scale.setScalar(ss);
     shadowBlobMat.opacity = Math.max(0.05, 0.4 * ss);
 
-    // Camera: follow ball with lag
-    const tX = ball.x * 0.25;
-    const tY = Math.max(4.5, ball.y + 5);
-    camera.position.x += (tX - camera.position.x) * 0.04;
-    camera.position.y += (tY - camera.position.y) * 0.03;
-    camera.position.z += (10 - camera.position.z) * 0.02;
-    camera.lookAt(ball.x * 0.2, ball.y * 0.15, 0);
+    // Landing indicator – always visible so player knows where to run
+    const landing = predictLandingPos();
+    landingRing.visible = true;
+    landingRing.position.set(landing.x, groundY(landing.x) + 0.01, landing.z);
+    const distToLanding = Math.hypot(landing.x - playerPos.x, landing.z - playerPos.z);
+    landingRingMat.color.setHex(distToLanding < KICK_RANGE * 1.5 ? 0x00ff44 : 0xff4400);
+    // Pulse faster and brighter while descending
+    const pulse = ball.vy < 0
+      ? 0.5 + Math.sin(time * 0.01) * 0.3
+      : 0.2 + Math.sin(time * 0.004) * 0.1;
+    landingRingMat.opacity = pulse;
+
+    // Kick-range ring around player
+    kickRing.position.set(playerPos.x, groundY(playerPos.x) + 0.02, playerPos.z);
+    const ballDist = Math.hypot(ball.x - playerPos.x, ball.z - playerPos.z);
+    kickRingMat.opacity = ballDist < KICK_RANGE
+      ? 0.35 + Math.sin(time * 0.012) * 0.2
+      : 0;
+
+    // Camera: follow player, keep ball in view
+    const camTX = playerPos.x * 0.7 + ball.x * 0.3;
+    const camTY = Math.max(5, ball.y * 0.4 + 6);
+    const camTZ = playerPos.z + 7;
+    camera.position.x += (camTX - camera.position.x) * 0.05;
+    camera.position.y += (camTY - camera.position.y) * 0.04;
+    camera.position.z += (camTZ - camera.position.z) * 0.05;
+    camera.lookAt(
+      (playerPos.x + ball.x) * 0.45,
+      ball.y * 0.25,
+      (playerPos.z + ball.z) * 0.45
+    );
 
   } else if (!gameStarted && !gameEnded) {
     // Idle orbit + auto-bounce
@@ -573,6 +782,8 @@ function animate(time) {
     ballGroup.position.set(ball.x, ball.y, ball.z);
     ballGroup.rotation.x += 0.03;
     shadowBlob.position.set(ball.x, gY + 0.005, ball.z);
+    landingRing.visible  = false;
+    kickRingMat.opacity  = 0;
   }
 
   // Animate characters
@@ -585,6 +796,12 @@ requestAnimationFrame(animate);
 
 function animateChars(time) {
   charMeshes.forEach((mesh, i) => {
+    // Bots stay at their fixed circle positions; player mesh follows playerPos
+    if (i !== selectedCharIndex) {
+      const bp = getBotPosition(i);
+      mesh.position.x = bp.x;
+      mesh.position.z = bp.z;
+    }
     mesh.scale.y = 1 + Math.sin(time * 0.002 + i) * 0.008;
     if (kickAnims[i]) {
       kickAnims[i].t -= 0.05;
@@ -595,7 +812,7 @@ function animateChars(time) {
         mesh.rotation.x = -Math.sin(kickAnims[i].t * Math.PI) * 0.4;
       }
     }
-    if (CHARACTERS[i].id === selectedCharacter.id && gameStarted) {
+    if (i === selectedCharIndex && gameStarted) {
       const hl = (Math.sin(time * 0.005) * 0.5 + 0.5) * 0.2;
       if (mesh.children[0] && mesh.children[0].material) {
         mesh.children[0].material.emissiveIntensity = hl;
@@ -861,3 +1078,52 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+// ═══════════════════════════════════════════════════════
+// MOBILE JOYSTICK
+// ═══════════════════════════════════════════════════════
+(function initJoystick() {
+  const base  = document.getElementById('joystick-base');
+  const knob  = document.getElementById('joystick-knob');
+  if (!base || !knob) return;
+
+  const JRADIUS = 38;
+  let touchId = null;
+
+  function updateKnob(touch) {
+    const rect = base.getBoundingClientRect();
+    const cx = rect.left + rect.width  / 2;
+    const cy = rect.top  + rect.height / 2;
+    let dx = touch.clientX - cx;
+    let dy = touch.clientY - cy;
+    const dist = Math.hypot(dx, dy);
+    if (dist > JRADIUS) { dx = dx / dist * JRADIUS; dy = dy / dist * JRADIUS; }
+    joystick.dx = dx / JRADIUS;
+    joystick.dz = dy / JRADIUS;
+    knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+  }
+
+  function resetKnob() {
+    joystick.dx = 0; joystick.dz = 0;
+    knob.style.transform = 'translate(-50%, -50%)';
+  }
+
+  base.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    touchId = e.changedTouches[0].identifier;
+    updateKnob(e.changedTouches[0]);
+  }, { passive: false });
+
+  document.addEventListener('touchmove', (e) => {
+    if (touchId === null) return;
+    for (const t of e.changedTouches) {
+      if (t.identifier === touchId) { e.preventDefault(); updateKnob(t); break; }
+    }
+  }, { passive: false });
+
+  document.addEventListener('touchend', (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === touchId) { touchId = null; resetKnob(); break; }
+    }
+  });
+})();

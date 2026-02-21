@@ -637,6 +637,65 @@ html, body {
   margin-top: 0.1rem;
 }
 
+/* ─── Mobile joystick ─────────────────────────────────── */
+.mobile-controls {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 1.5rem;
+  z-index: 200;
+  pointer-events: none;
+}
+
+.joystick-wrap {
+  pointer-events: all;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  /* Only show on touch / small screens */
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .joystick-wrap { display: flex; }
+  /* Shift kick buttons up so joystick doesn't overlap */
+  .move-buttons  { bottom: 9rem; }
+}
+
+.joystick-base {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.35);
+  border: 2px solid rgba(255,255,255,0.25);
+  position: relative;
+  touch-action: none;
+  user-select: none;
+}
+
+.joystick-knob {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(249,115,22,0.85);
+  box-shadow: 0 0 10px rgba(249,115,22,0.5);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  touch-action: none;
+  pointer-events: none;
+  transition: none;
+}
+
+.joystick-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: rgba(255,255,255,0.6);
+  text-transform: uppercase;
+}
+
 /* Game Over */
 .game-over-score {
   font-size: 4rem;
