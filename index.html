@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chungee – Thapathali Edition</title>
+  <meta name="description" content="A browser-based 3D physics game inspired by students playing in the parking area of Thapathali Engineering Campus." />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* Home-specific overrides */
+    body { overflow-y: auto; }
+    .scroll-container { position: relative; z-index: 10; }
+    footer {
+      position: relative; z-index: 10;
+      text-align: center; padding: 2rem;
+      color: var(--text-muted); font-size: 0.8rem;
+      border-top: 1px solid rgba(255,255,255,0.05);
+    }
+  </style>
+</head>
+<body>
+
+<!-- Background 3D Scene -->
+<canvas id="home-canvas"></canvas>
+
+<!-- Navigation -->
+<nav class="nav">
+  <a href="index.html" class="nav-logo">CHUNGEE</a>
+  <ul class="nav-links">
+    <li><a href="#about">About</a></li>
+    <li><a href="leaderboard.html">Leaderboard</a></li>
+    <li><a href="game.html">Play</a></li>
+  </ul>
+</nav>
+
+<!-- Hero Section -->
+<div class="home-content">
+  <div class="home-hero animate-slide-up">
+    <div class="home-title">CHUNGEE</div>
+    <div class="home-subtitle">Thapathali Edition</div>
+    <div class="home-tagline">
+      "Friends. Parking lot. One rubber ball. Keep it in the air."
+    </div>
+  </div>
+
+  <div class="btn-group animate-slide-up delay-1">
+    <a href="game.html" class="btn btn-primary">🎮 Play Now</a>
+    <a href="leaderboard.html" class="btn btn-secondary">🏆 Leaderboard</a>
+    <a href="#about" class="btn btn-secondary">ℹ️ About</a>
+  </div>
+
+  <!-- Leaderboard Preview -->
+  <div class="leaderboard-preview animate-slide-up delay-2">
+    <div class="section-title" style="font-size:1.3rem;">🏆 Top Scores</div>
+    <table class="lb-table" id="home-lb">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Player</th>
+          <th>Mode</th>
+          <th>Score</th>
+        </tr>
+      </thead>
+      <tbody id="home-lb-body">
+        <tr><td colspan="4" style="text-align:center;color:var(--text-muted);font-style:italic;">Play to set scores!</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- About Section -->
+<div class="scroll-container">
+  <section class="about-section" id="about">
+    <div class="section-title">About the Game</div>
+    <p style="text-align:center;color:var(--text-muted);max-width:600px;margin:0 auto 3rem;line-height:1.7;">
+      Chungee is a traditional foot-juggling game played by students in the parking area
+      of <strong style="color:var(--accent)">Thapathali Engineering Campus</strong>, Kathmandu.
+      Players sit in a circle and keep a small rubber ball airborne using only their feet.
+    </p>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🏢</div>
+        <h3>Authentic Campus</h3>
+        <p>Realistic 3D recreation of the Thapathali parking area, complete with Library, D Block, Material Lab and Tennis Court.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⚽</div>
+        <h3>Realistic Physics</h3>
+        <p>Accurate rubber ball simulation with gravity, bounce, friction, air drag and angular momentum.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">👥</div>
+        <h3>8 Characters</h3>
+        <p>Choose from Prasiddha, Lakshya, Mandip, Resham, Hitesh, Prabesh, Manish or JD – each with unique stats.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎮</div>
+        <h3>6 Unique Moves</h3>
+        <p>Basic Tap, Side Flick, Back Heel, Jump Pass, Spin Trick and Power Kick. Each with different risk and reward.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🌍</div>
+        <h3>4 Game Modes</h3>
+        <p>Classic, Rain (slippery), Night, and Hardcore mode for different challenges and atmospheres.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🏆</div>
+        <h3>Combo System</h3>
+        <p>Chain kicks without touching the ground for combo multipliers. Beat your friends' high scores!</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- How to Play -->
+  <section class="about-section" style="padding-top:2rem;">
+    <div class="section-title">How to Play</div>
+    <div class="features-grid" style="max-width:800px;margin:0 auto;">
+      <div class="feature-card">
+        <div class="feature-icon">1️⃣</div>
+        <h3>Select Character</h3>
+        <p>Pick one of 8 characters. Each has different Power, Agility, and Spin ratings.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">2️⃣</div>
+        <h3>Choose Mode</h3>
+        <p>Start with Classic mode. Rain, Night and Hardcore unlock new challenges.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">3️⃣</div>
+        <h3>Keep it Airborne</h3>
+        <p>Press keys 1-6 or click move buttons to kick. Don't let Chungee touch the ground!</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">4️⃣</div>
+        <h3>Build Combos</h3>
+        <p>Kick multiple times without ground contact for multiplied score. Go for max combo!</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>© 2025 Chungee – Thapathali Edition &nbsp;|&nbsp; 
+       Made with ❤️ for Thapathali Engineering Campus &nbsp;|&nbsp;
+       <a href="game.html" style="color:var(--primary);text-decoration:none;">Play Now →</a>
+    </p>
+  </footer>
+</div>
+
+<!-- Scripts -->
+<script type="module" src="js/home.js"></script>
+<script>
+  // Populate leaderboard preview from localStorage
+  document.addEventListener('DOMContentLoaded', () => {
+    try {
+      const scores = JSON.parse(localStorage.getItem('chungee_scores') || '[]').slice(0, 5);
+      const tbody = document.getElementById('home-lb-body');
+      if (scores.length > 0 && tbody) {
+        tbody.innerHTML = scores.map((s, i) => `
+          <tr class="rank-${i+1}">
+            <td>${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#' + (i+1)}</td>
+            <td>${s.name || 'Unknown'}</td>
+            <td>${s.mode || 'Classic'}</td>
+            <td><strong>${s.score || 0}</strong></td>
+          </tr>
+        `).join('');
+      }
+    } catch (e) {
+      console.error('chungee: leaderboard preview failed', e);
+    }
+  });
+</script>
+</body>
+</html>

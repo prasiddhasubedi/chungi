@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Play – Chungee Thapathali Edition</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- Loading Screen -->
+<div id="loading-screen">
+  <div class="loading-title">CHUNGEE</div>
+  <div class="loading-sub">Thapathali Edition</div>
+  <div class="loading-bar-container">
+    <div class="loading-bar"></div>
+  </div>
+</div>
+
+<!-- 3D Game Canvas -->
+<canvas id="game-canvas"></canvas>
+
+<!-- HUD (shown during gameplay) -->
+<div class="hud">
+  <div class="hud-top">
+    <!-- Score -->
+    <div class="hud-score">
+      <div class="label">Score</div>
+      <div class="value" id="score-val">0</div>
+    </div>
+
+    <!-- Combo -->
+    <div class="hud-combo">
+      <div class="combo-display" id="combo-val"></div>
+      <div class="combo-label" id="combo-label"></div>
+    </div>
+
+    <!-- Mode / Character (top-right is pause button below) -->
+    <div class="hud-mode">
+      <div class="label">Mode</div>
+      <div class="value" id="mode-name">–</div>
+      <div class="label" style="margin-top:0.3rem;">Player</div>
+      <div class="value" id="char-name" style="font-size:0.85rem;color:var(--accent)">–</div>
+    </div>
+  </div>
+</div>
+
+<!-- Pause Button -->
+<button id="btn-pause" onclick="onBtnPause()">⏸ Pause</button>
+
+<!-- Move Buttons -->
+<div class="move-buttons">
+  <button class="move-btn" title="Basic Tap">
+    👟 Basic Tap<span class="key">[1 / Space]</span>
+  </button>
+  <button class="move-btn" title="Side Flick">
+    ↩️ Side Flick<span class="key">[2]</span>
+  </button>
+  <button class="move-btn" title="Back Heel">
+    🦶 Back Heel<span class="key">[3]</span>
+  </button>
+  <button class="move-btn" title="Jump Pass">
+    🦘 Jump Pass<span class="key">[4]</span>
+  </button>
+  <button class="move-btn" title="Spin Trick">
+    🌀 Spin Trick<span class="key">[5]</span>
+  </button>
+  <button class="move-btn" title="Power Kick">
+    💥 Power Kick<span class="key">[6]</span>
+  </button>
+</div>
+
+<!-- Controls hint -->
+<div class="controls-hint" id="controls-hint">
+  Press 1–6 or Space to kick • Click move buttons or characters • Don't let Chungee touch the ground!
+</div>
+
+<!-- Toast / Floating Feedback -->
+<div class="toast" id="toast"></div>
+
+<!-- ═══════════ OVERLAY: Character Selection ═══════════ -->
+<div class="overlay" id="overlay-select">
+  <div class="modal">
+    <h2>🏃 Choose Your Player</h2>
+    <p>Each character has different Power, Agility, and Spin stats.</p>
+    <div class="char-grid" id="char-grid"></div>
+    <div class="btn-group" style="margin-top:1.5rem;justify-content:center;">
+      <button class="btn btn-primary" onclick="onBtnStart()">Next: Choose Mode →</button>
+      <a href="index.html" class="btn btn-secondary">← Home</a>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ OVERLAY: Mode Selection ═══════════ -->
+<div class="overlay hidden" id="overlay-mode">
+  <div class="modal">
+    <h2>🌍 Choose Game Mode</h2>
+    <p>Different modes change physics and atmosphere.</p>
+    <div class="mode-grid" id="mode-grid"></div>
+    <div class="btn-group" style="margin-top:1.5rem;justify-content:center;">
+      <button class="btn btn-primary" onclick="onBtnConfirmMode()">🎮 Start Game!</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('overlay-mode').classList.add('hidden');document.getElementById('overlay-select').classList.remove('hidden')">← Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ OVERLAY: Pause ═══════════ -->
+<div class="overlay hidden" id="overlay-pause">
+  <div class="modal" style="max-width:420px;">
+    <h2>⏸ Paused</h2>
+    <p>Take a breather – Thapathali parking lot is waiting.</p>
+    <div class="btn-group" style="flex-direction:column;align-items:center;">
+      <button class="btn btn-primary" style="width:220px;" onclick="onBtnResume()">▶ Resume</button>
+      <button class="btn btn-secondary" style="width:220px;" onclick="onBtnRestart()">🔄 Restart</button>
+      <a href="leaderboard.html" class="btn btn-secondary" style="width:220px;">🏆 Leaderboard</a>
+      <button class="btn btn-secondary" style="width:220px;" onclick="onBtnQuit()">🚪 Quit to Home</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ OVERLAY: Game Over ═══════════ -->
+<div class="overlay hidden" id="overlay-gameover">
+  <div class="modal" style="max-width:480px;">
+    <h2>💔 Chungee Touched the Ground!</h2>
+    <p>The parking lot wins this round. Better luck next time!</p>
+
+    <div class="game-over-score" id="final-score">0</div>
+
+    <div class="game-over-stats">
+      <div class="stat-item">
+        <div class="s-label">Max Combo</div>
+        <div class="s-value" id="final-combo">0</div>
+      </div>
+      <div class="stat-item">
+        <div class="s-label">Total Kicks</div>
+        <div class="s-value" id="final-kicks">0</div>
+      </div>
+    </div>
+
+    <div class="btn-group" style="flex-direction:column;align-items:center;margin-top:1rem;">
+      <button class="btn btn-primary" style="width:220px;" onclick="onBtnRestart()">🔄 Play Again</button>
+      <a href="leaderboard.html" class="btn btn-secondary" style="width:220px;">🏆 View Leaderboard</a>
+      <button class="btn btn-secondary" style="width:220px;" onclick="onBtnQuit()">🚪 Back to Home</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ SCRIPTS ═══════════ -->
+<script type="module" src="js/game.js"></script>
+
+</body>
+</html>

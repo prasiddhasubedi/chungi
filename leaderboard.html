@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Leaderboard – Chungee Thapathali Edition</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="nav">
+  <a href="index.html" class="nav-logo">CHUNGEE</a>
+  <ul class="nav-links">
+    <li><a href="index.html">Home</a></li>
+    <li><a href="game.html">Play</a></li>
+    <li><a href="leaderboard.html" style="color:var(--primary)">Leaderboard</a></li>
+  </ul>
+</nav>
+
+<div class="lb-page">
+  <h1>🏆 Leaderboard</h1>
+  <p class="subtitle">Top scores from Thapathali Parking Ground</p>
+
+  <!-- Filter tabs -->
+  <div class="lb-tabs">
+    <button class="lb-tab active" data-mode="all">All Modes</button>
+    <button class="lb-tab" data-mode="classic">Classic</button>
+    <button class="lb-tab" data-mode="rain">Rain</button>
+    <button class="lb-tab" data-mode="night">Night</button>
+    <button class="lb-tab" data-mode="hardcore">Hardcore</button>
+  </div>
+
+  <!-- Leaderboard entries -->
+  <div id="lb-list">
+    <div class="empty-lb">No scores yet. <a href="game.html" style="color:var(--primary)">Play a game</a> to appear here! 🏆</div>
+  </div>
+
+  <!-- Actions -->
+  <div class="btn-group" style="margin-top:2rem;justify-content:center;">
+    <a href="game.html" class="btn btn-primary">🎮 Play Now</a>
+    <button id="btn-clear" class="btn btn-secondary" style="font-size:0.8rem;">🗑 Clear Scores</button>
+  </div>
+</div>
+
+<!-- Footer -->
+<footer style="text-align:center;padding:2rem;color:var(--text-muted);font-size:0.8rem;border-top:1px solid rgba(255,255,255,0.05);">
+  <p>Chungee – Thapathali Edition &nbsp;|&nbsp; Scores saved locally in your browser</p>
+</footer>
+
+<!-- Scripts -->
+<script type="module" src="js/leaderboard.js"></script>
+
+</body>
+</html>
