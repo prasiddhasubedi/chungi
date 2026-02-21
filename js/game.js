@@ -9,28 +9,28 @@ import * as THREE from './lib/three.module.min.js';
 // CHARACTER DATA
 // ═══════════════════════════════════════════════════════
 const CHARACTERS = [
-  { id: 'prasiddha', name: 'Prasiddha', desc: ,
+  { id: 'prasiddha', name: 'Prasiddha', desc: '',
     color: 0xe8a87c, accentColor: 0xffffff, height: 1.68,
     power: 75, agility: 85, spin: 80, stamina: 75, avatar: 'P' },
-  { id: 'lakshya',   name: 'Lakshya',   desc: ,
+  { id: 'lakshya',   name: 'Lakshya',   desc: '',
     color: 0x1a3a8a, accentColor: 0x3355cc, height: 1.83,
     power: 95, agility: 65, spin: 70, stamina: 85, avatar: 'L' },
-  { id: 'mandip',    name: 'Mandip',    desc: ,
+  { id: 'mandip',    name: 'Mandip',    desc: '',
     color: 0x333333, accentColor: 0x444444, height: 1.68,
     power: 78, agility: 88, spin: 85, stamina: 80, avatar: 'M' },
-  { id: 'resham',    name: 'Resham',    desc: ,
+  { id: 'resham',    name: 'Resham',    desc: '',
     color: 0x666680, accentColor: 0x8888a0, height: 1.80,
     power: 80, agility: 82, spin: 88, stamina: 78, avatar: 'R' },
-  { id: 'hitesh',    name: 'Hitesh',    desc: ,
+  { id: 'hitesh',    name: 'Hitesh',    desc: '',
     color: 0x8B4513, accentColor: 0xD2691E, height: 1.71,
     power: 82, agility: 80, spin: 75, stamina: 82, avatar: 'H' },
-  { id: 'prabesh',   name: 'Prabesh',   desc:,
+  { id: 'prabesh',   name: 'Prabesh',   desc: '',
     color: 0xc8a800, accentColor: 0xffd700, height: 1.71,
     power: 78, agility: 87, spin: 82, stamina: 78, avatar: 'Pb' },
-  { id: 'manish',    name: 'Manish',    desc: ,
+  { id: 'manish',    name: 'Manish',    desc: '',
     color: 0xc8b060, accentColor: 0xe8d080, height: 1.74,
     power: 80, agility: 83, spin: 80, stamina: 80, avatar: 'Mn' },
-  { id: 'jd',        name: 'JD',        desc:,
+  { id: 'jd',        name: 'JD',        desc: '',
     color: 0x1a4a8a, accentColor: 0x2255aa, height: 1.65,
     power: 72, agility: 90, spin: 90, stamina: 75, avatar: 'JD' },
 ];
@@ -235,10 +235,6 @@ CHARACTERS.forEach((char, i) => {
   card.innerHTML = `
     <div class="char-avatar" style="background:${hexColor}">${char.avatar}</div>
     <div class="char-name">${char.name}</div>
-    <div class="char-desc">${char.desc}</div>
-    <div class="stat-bar"><span>PWR</span><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${char.power}%"></div></div></div>
-    <div class="stat-bar"><span>AGI</span><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${char.agility}%"></div></div></div>
-    <div class="stat-bar"><span>SPN</span><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${char.spin}%"></div></div></div>
   `;
   card.addEventListener('click', () => {
     document.querySelectorAll('.char-card').forEach(c => c.classList.remove('selected'));
